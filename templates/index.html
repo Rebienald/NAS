@@ -61,14 +61,19 @@
                 </div>
             </div>
 
-            <div class="dropzone" id="dropzone">
+            <label for="fileInput" class="dropzone" id="dropzone">
                 <div class="dropzone-icon">
                     <i class="fas fa-arrow-up-from-bracket"></i>
                 </div>
                 <div class="dropzone-title">Click to upload or drag and drop images</div>
                 <div class="dropzone-subtitle">Supports JPG, PNG, WEBP, HEIC, GIF up to any resolution</div>
-                <input type="file" id="fileInput" class="file-input-hidden" multiple accept="image/*">
-            </div>
+                <div class="upload-btn-action">
+                    <span class="btn-upload-photos">
+                        <i class="fas fa-plus"></i> Select Photos to Upload
+                    </span>
+                </div>
+                <input type="file" id="fileInput" name="photos" class="file-input-overlay" multiple accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.gif,.bmp">
+            </label>
 
             <div class="upload-queue" id="uploadQueue">
                 <div class="upload-progress-bar-wrap">
@@ -127,6 +132,7 @@
         </div>
     </div>
 
+    <script src="/static/js/storage.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

@@ -191,11 +191,15 @@ body {
     border: 2px dashed var(--border-subtle);
     border-radius: var(--radius-md);
     background: #fafbfc;
-    padding: 2.5rem 1.5rem;
+    padding: 2.25rem 1.5rem;
     text-align: center;
     cursor: pointer;
     transition: all 0.25s ease;
     position: relative;
+    display: block;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .dropzone.dragover {
@@ -207,6 +211,7 @@ body {
     font-size: 2.2rem;
     color: var(--text-muted);
     margin-bottom: 0.75rem;
+    pointer-events: none;
 }
 
 .dropzone-title {
@@ -214,15 +219,70 @@ body {
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 0.35rem;
+    pointer-events: none;
 }
 
 .dropzone-subtitle {
     font-size: 0.82rem;
     color: var(--text-muted);
+    margin-bottom: 1rem;
+    pointer-events: none;
+}
+
+.upload-btn-action {
+    display: flex;
+    justify-content: center;
+    margin-top: 0.75rem;
+    pointer-events: none;
+}
+
+.btn-upload-photos {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--accent-dark);
+    color: #ffffff;
+    font-size: 0.92rem;
+    font-weight: 600;
+    padding: 0.75rem 1.75rem;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+    pointer-events: none;
+    min-height: 44px;
+}
+
+.dropzone:hover .btn-upload-photos,
+.dropzone:active .btn-upload-photos {
+    background: #000000;
+    transform: translateY(-1px);
+}
+
+/* Full overlay file input:
+   Directly receives touch and click events across all iOS, Android, and legacy desktop browsers.
+   Bypasses mobile browser security restrictions on hidden file inputs. */
+.file-input-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 20;
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 0;
+    display: block !important;
 }
 
 .file-input-hidden {
-    display: none;
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
 }
 
 /* Upload Queue Bar */

@@ -34,16 +34,22 @@ function openNASDatabase() {
 
 const ClientStorage = {
     async isBackendAvailable() {
-        // If loaded on GitHub Pages or static host, don't try local API endpoints
         if (window.location.protocol === 'file:' || window.location.hostname.includes('github.io')) {
             return false;
         }
-        try {
-            const res = await fetch('/api/stats', { signal: AbortSignal.timeout(1200) });
-            return res.ok;
-        } catch {
-            return false;
-        }
+        return new Promise((resolve) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/stats', true);
+            xhr.timeout = 2000;
+            xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+            xhr.onerror = () => resolve(false);
+            xhr.ontimeout = () => resolve(false);
+            try {
+                xhr.send();
+            } catch (e) {
+                resolve(false);
+            }
+        });
     },
 
     async getStats() {
