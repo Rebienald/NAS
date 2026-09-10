@@ -34,13 +34,11 @@ function openNASDatabase() {
 
 const ClientStorage = {
     async isBackendAvailable() {
-        if (window.location.protocol === 'file:' || window.location.hostname.includes('github.io')) {
-            return false;
-        }
+        const testUrl = (typeof getApiUrl === 'function') ? getApiUrl('/api/stats') : '/api/stats';
         return new Promise((resolve) => {
             const xhr = new XMLHttpRequest();
-            xhr.open('GET', '/api/stats', true);
-            xhr.timeout = 2000;
+            xhr.open('GET', testUrl, true);
+            xhr.timeout = 3000;
             xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
             xhr.onerror = () => resolve(false);
             xhr.ontimeout = () => resolve(false);

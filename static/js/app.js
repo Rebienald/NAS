@@ -2,6 +2,64 @@ let currentFolder = 'all';
 let allDevices = [];
 let useBackend = false;
 
+const DEFAULT_TUNNEL_URL = 'https://spa-vatican-voting-utilization.trycloudflare.com';
+
+function getServerBaseUrl() {
+    const custom = localStorage.getItem('nas_server_url');
+    if (custom && custom.trim()) return custom.trim().replace(/\/+$/, '');
+    if (window.location.hostname.includes('github.io')) {
+        return DEFAULT_TUNNEL_URL;
+    }
+    return '';
+}
+
+function getApiUrl(path) {
+    const base = getServerBaseUrl();
+    return base ? `${base}${path}` : path;
+}
+
+function getAssetUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+    }
+    const base = getServerBaseUrl();
+    return base ? `${base}${url}` : url;
+}
+
+function updateServerStatus() {
+    const pill = document.getElementById('serverStatusPill');
+    const dot = pill ? pill.querySelector('.status-dot') : null;
+    const text = document.getElementById('serverStatusText');
+    if (!pill || !dot || !text) return;
+
+    if (useBackend) {
+        dot.className = 'status-dot online';
+        const base = getServerBaseUrl();
+        if (base) {
+            text.textContent = 'Central Cloud Sync';
+        } else {
+            text.textContent = 'Central Database';
+        }
+    } else {
+        dot.className = 'status-dot offline';
+        text.textContent = 'Local Browser Cache';
+    }
+}
+
+function promptServerUrl() {
+    const current = localStorage.getItem('nas_server_url') || (window.location.hostname.includes('github.io') ? DEFAULT_TUNNEL_URL : '');
+    const entered = prompt('Enter your Central NAS Server URL:\n(Leave empty to reset to default)', current);
+    if (entered !== null) {
+        if (entered.trim()) {
+            localStorage.setItem('nas_server_url', entered.trim());
+        } else {
+            localStorage.removeItem('nas_server_url');
+        }
+        window.location.reload();
+    }
+}
+
 // Device detection helper
 function detectDeviceName() {
     const ua = navigator.userAgent || '';
@@ -66,7 +124,7 @@ async function loadStats() {
     try {
         let data;
         if (useBackend) {
-            const res = await fetch('/api/stats');
+            const res = await fetch(getApiUrl('/api/stats'));
             data = await res.json();
         } else {
             data = await ClientStorage.getStats();
@@ -83,7 +141,7 @@ async function loadStats() {
 async function loadDevices() {
     try {
         if (useBackend) {
-            const res = await fetch('/api/devices');
+            const res = await fetch(getApiUrl('/api/devices'));
             allDevices = await res.json();
         } else {
             allDevices = await ClientStorage.getDevices();
@@ -160,7 +218,7 @@ async function loadPhotos() {
     try {
         let photos = [];
         if (useBackend) {
-            const url = `/api/photos?folder=${encodeURIComponent(currentFolder)}`;
+            const url = getApiUrl(`/api/photos?folder=${encodeURIComponent(currentFolder)}`);
             const res = await fetch(url);
             photos = await res.json();
         } else {
@@ -182,9 +240,10 @@ async function loadPhotos() {
         photos.forEach(photo => {
             const card = document.createElement('div');
             card.className = 'photo-card';
+            const assetUrl = getAssetUrl(photo.url);
             card.innerHTML = `
-                <div class="photo-img-wrap" onclick="openLightbox('${photo.url}', '${escapeHtml(photo.original_name)}', '${escapeHtml(photo.device_name)}', '${formatBytes(photo.file_size)}')">
-                    <img src="${photo.url}" alt="${escapeHtml(photo.original_name)}" class="photo-img" loading="lazy">
+                <div class="photo-img-wrap" onclick="openLightbox('${assetUrl}', '${escapeHtml(photo.original_name)}', '${escapeHtml(photo.device_name)}', '${formatBytes(photo.file_size)}')">
+                    <img src="${assetUrl}" alt="${escapeHtml(photo.original_name)}" class="photo-img" loading="lazy">
                     <div class="photo-folder-tag">
                         <i class="fas fa-folder-closed"></i> ${escapeHtml(photo.device_name)}
                     </div>
@@ -195,7 +254,7 @@ async function loadPhotos() {
                         <div class="photo-date">${formatDate(photo.uploaded_at)} · ${formatBytes(photo.file_size)}</div>
                     </div>
                     <div class="photo-actions">
-                        <a href="${photo.url}" download="${escapeHtml(photo.original_name)}" class="btn-icon" title="Download">
+                        <a href="${assetUrl}" download="${escapeHtml(photo.original_name)}" class="btn-icon" title="Download">
                             <i class="fas fa-download"></i>
                         </a>
                         <button class="btn-icon danger" onclick="deletePhoto(${photo.id})" title="Delete">
@@ -247,7 +306,7 @@ async function deletePhoto(photoId) {
     }
     try {
         if (useBackend) {
-            const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
+            const res = await fetch(getApiUrl(`/api/photos/${photoId}`), { method: 'DELETE' });
             const data = await res.json();
             if (!data.success) throw new Error('Delete failed');
         } else {
@@ -318,7 +377,7 @@ function setupUpload() {
                     formData.append('photos', files[i]);
                 }
                 const xhr = new XMLHttpRequest();
-                xhr.open('POST', '/api/upload', true);
+                xhr.open('POST', getApiUrl('/api/upload'), true);
                 xhr.upload.onprogress = (e) => {
                     if (e.lengthComputable) {
                         const percent = Math.round((e.loaded / e.total) * 100);
@@ -375,6 +434,7 @@ function escapeHtml(str) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     useBackend = await ClientStorage.isBackendAvailable();
+    updateServerStatus();
     setupUpload();
     await loadStats();
     await loadDevices();

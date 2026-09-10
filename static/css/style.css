@@ -109,6 +109,41 @@ body {
     letter-spacing: 0.05em;
 }
 
+.server-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: var(--text-primary);
+    cursor: pointer;
+    border: 1px solid var(--border-subtle);
+    transition: all 0.2s ease;
+}
+
+.server-status-pill:hover {
+    background: #e2e8f0;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.online {
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
+}
+
+.status-dot.offline {
+    background: #f59e0b;
+}
+
 /* Main Layout */
 .main-content {
     max-width: 1280px;
