@@ -10,6 +10,7 @@ from PIL import Image, ExifTags
 from database import init_db, get_db
 
 app = Flask(__name__)
+init_db()
 
 # Base upload directory
 UPLOAD_ROOT = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
