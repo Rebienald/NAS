@@ -212,3 +212,166 @@ const ClientStorage = {
         });
     }
 };
+
+const SUPABASE_CONFIG = {
+    url: 'https://ngjckggjadtoevbnhjhi.supabase.co',
+    key: 'sb_publishable_zFd8VxxbMxpu7wFblnC36w_8Np8JVVf'
+};
+
+const SupabaseStorage = {
+    isConfigured() {
+        return Boolean(SUPABASE_CONFIG.url && SUPABASE_CONFIG.key);
+    },
+
+    getHeaders() {
+        return {
+            'apikey': SUPABASE_CONFIG.key,
+            'Authorization': `Bearer ${SUPABASE_CONFIG.key}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        };
+    },
+
+    async testConnection() {
+        try {
+            const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/nas_photos?select=id&limit=1`, {
+                headers: this.getHeaders()
+            });
+            if (res.ok) return { ok: true };
+            const err = await res.json().catch(() => ({}));
+            return { ok: false, error: err.message || 'Table not ready', code: err.code };
+        } catch (e) {
+            return { ok: false, error: e.message };
+        }
+    },
+
+    async getStats() {
+        const photos = await this.getPhotos('all');
+        const devMap = new Set(photos.map(p => p.folder_name));
+        const totalBytes = photos.reduce((acc, p) => acc + (p.file_size || 0), 0);
+        return {
+            photo_count: photos.length,
+            device_count: devMap.size,
+            total_size_bytes: totalBytes
+        };
+    },
+
+    async getDevices() {
+        const photos = await this.getPhotos('all');
+        const devMap = {};
+        photos.forEach(p => {
+            const f = p.folder_name || 'Unknown-Device';
+            if (!devMap[f]) {
+                devMap[f] = {
+                    id: f,
+                    folder_name: f,
+                    display_name: p.device_name || f,
+                    device_type: 'Mobile',
+                    photo_count: 0,
+                    total_size: 0,
+                    latest_upload: p.uploaded_at,
+                    cover_photo: p.url
+                };
+            }
+            devMap[f].photo_count++;
+            devMap[f].total_size += (p.file_size || 0);
+        });
+        return Object.values(devMap);
+    },
+
+    async getPhotos(folder) {
+        let endpoint = `${SUPABASE_CONFIG.url}/rest/v1/nas_photos?select=*&order=id.desc`;
+        if (folder && folder !== 'all') {
+            endpoint = `${SUPABASE_CONFIG.url}/rest/v1/nas_photos?folder_name=eq.${encodeURIComponent(folder)}&select=*&order=id.desc`;
+        }
+        const res = await fetch(endpoint, { headers: this.getHeaders() });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to fetch photos');
+        }
+        const data = await res.json();
+        return data.map(p => ({
+            id: p.id,
+            device_name: p.device_name,
+            folder_name: p.folder_name,
+            original_name: p.original_name,
+            url: p.url,
+            file_size: p.file_size,
+            uploaded_at: p.uploaded_at || p.created_at
+        }));
+    },
+
+    async savePhoto(file, deviceName) {
+        const base64Data = await this.compressAndEncode(file);
+        const folderName = deviceName.trim().replace(/[^\w\s\-\.]/g, '').replace(/[\s]+/g, '-');
+
+        const payload = {
+            device_name: deviceName.trim(),
+            folder_name: folderName,
+            original_name: file.name,
+            url: base64Data,
+            file_size: file.size,
+            uploaded_at: new Date().toISOString()
+        };
+
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/nas_photos`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to save photo to Supabase');
+        }
+        const created = await res.json();
+        return created[0] || payload;
+    },
+
+    async deletePhoto(photoId) {
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/nas_photos?id=eq.${photoId}`, {
+            method: 'DELETE',
+            headers: this.getHeaders()
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to delete photo from Supabase');
+        }
+        return true;
+    },
+
+    compressAndEncode(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const maxDim = 1600;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height = Math.round((height * maxDim) / width);
+                            width = maxDim;
+                        } else {
+                            width = Math.round((width * maxDim) / height);
+                            height = maxDim;
+                        }
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.85));
+                };
+                img.onerror = () => resolve(event.target.result);
+            };
+            reader.onerror = reject;
+        });
+    }
+};
