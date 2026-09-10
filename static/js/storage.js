@@ -1,3 +1,28 @@
+const DEFAULT_TUNNEL_URL = 'https://spa-vatican-voting-utilization.trycloudflare.com';
+
+function getServerBaseUrl() {
+    const custom = localStorage.getItem('nas_server_url');
+    if (custom && custom.trim()) return custom.trim().replace(/\/+$/, '');
+    if (window.location.hostname.includes('github.io')) {
+        return DEFAULT_TUNNEL_URL;
+    }
+    return '';
+}
+
+function getApiUrl(path) {
+    const base = getServerBaseUrl();
+    return base ? `${base}${path}` : path;
+}
+
+function getAssetUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+    }
+    const base = getServerBaseUrl();
+    return base ? `${base}${url}` : url;
+}
+
 // Client-side persistent IndexedDB storage engine for standalone web deployment
 const DB_NAME = 'NAS_STORAGE_DB';
 const DB_VERSION = 1;
@@ -34,7 +59,7 @@ function openNASDatabase() {
 
 const ClientStorage = {
     async isBackendAvailable() {
-        const testUrl = (typeof getApiUrl === 'function') ? getApiUrl('/api/stats') : '/api/stats';
+        const testUrl = getApiUrl('/api/stats');
         return new Promise((resolve) => {
             const xhr = new XMLHttpRequest();
             xhr.open('GET', testUrl, true);

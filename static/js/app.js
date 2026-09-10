@@ -2,31 +2,6 @@ let currentFolder = 'all';
 let allDevices = [];
 let useBackend = false;
 
-const DEFAULT_TUNNEL_URL = 'https://spa-vatican-voting-utilization.trycloudflare.com';
-
-function getServerBaseUrl() {
-    const custom = localStorage.getItem('nas_server_url');
-    if (custom && custom.trim()) return custom.trim().replace(/\/+$/, '');
-    if (window.location.hostname.includes('github.io')) {
-        return DEFAULT_TUNNEL_URL;
-    }
-    return '';
-}
-
-function getApiUrl(path) {
-    const base = getServerBaseUrl();
-    return base ? `${base}${path}` : path;
-}
-
-function getAssetUrl(url) {
-    if (!url) return '';
-    if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) {
-        return url;
-    }
-    const base = getServerBaseUrl();
-    return base ? `${base}${url}` : url;
-}
-
 function updateServerStatus() {
     const pill = document.getElementById('serverStatusPill');
     const dot = pill ? pill.querySelector('.status-dot') : null;
