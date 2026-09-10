@@ -1,0 +1,364 @@
+let currentFolder = 'all';
+let allDevices = [];
+
+// Device detection helper
+function detectDeviceName() {
+    const ua = navigator.userAgent || '';
+    
+    // Check for common phone identifiers in UA
+    const redmiMatch = ua.match(/(Redmi[^;\)]*|M2\d{3}[^;\)]*|2\d{3}[^;\)]*)/i);
+    if (redmiMatch) {
+        return redmiMatch[1].trim();
+    }
+    if (/iPhone/i.test(ua)) {
+        return 'Apple iPhone';
+    }
+    if (/iPad/i.test(ua)) {
+        return 'Apple iPad';
+    }
+    if (/Samsung|SM-[A-Z0-9]+/i.test(ua)) {
+        const smMatch = ua.match(/SM-[A-Z0-9]+/i);
+        return smMatch ? `Samsung ${smMatch[0]}` : 'Samsung Galaxy';
+    }
+    if (/Pixel/i.test(ua)) {
+        const pixelMatch = ua.match(/Pixel\s*\d+[a-zA-Z]*/i);
+        return pixelMatch ? pixelMatch[0] : 'Google Pixel';
+    }
+    if (/Xiaomi|POCO/i.test(ua)) {
+        return 'Xiaomi Device';
+    }
+    if (/Android/i.test(ua)) {
+        return 'Android Mobile';
+    }
+    if (/Macintosh/i.test(ua)) {
+        return 'MacBook Pro';
+    }
+    if (/Windows/i.test(ua)) {
+        return 'Windows Workstation';
+    }
+    if (/Linux/i.test(ua)) {
+        return 'Linux PC';
+    }
+    return 'Redmi Note 15'; // Clean sensible default
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function formatDate(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// Fetch stats and update header
+async function loadStats() {
+    try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        document.getElementById('statTotalPhotos').textContent = data.photo_count || 0;
+        document.getElementById('statTotalDevices').textContent = data.device_count || 0;
+        document.getElementById('statTotalStorage').textContent = formatBytes(data.total_size_bytes || 0);
+    } catch (e) {
+        console.error('Failed to load stats', e);
+    }
+}
+
+// Fetch devices and render folder overview and tabs
+async function loadDevices() {
+    try {
+        const res = await fetch('/api/devices');
+        allDevices = await res.json();
+
+        renderFolderTabs();
+        renderFolderOverview();
+    } catch (e) {
+        console.error('Failed to load devices', e);
+    }
+}
+
+function renderFolderTabs() {
+    const tabsContainer = document.getElementById('folderTabs');
+    tabsContainer.innerHTML = `
+        <button class="tab-btn ${currentFolder === 'all' ? 'active' : ''}" onclick="selectFolder('all')">
+            <i class="fas fa-layer-group"></i> All Photos
+        </button>
+    `;
+
+    allDevices.forEach(dev => {
+        const btn = document.createElement('button');
+        btn.className = `tab-btn ${currentFolder === dev.folder_name ? 'active' : ''}`;
+        btn.onclick = () => selectFolder(dev.folder_name);
+        btn.innerHTML = `
+            <i class="fas fa-mobile-screen-button"></i> ${escapeHtml(dev.display_name)}
+            <span class="tab-badge">${dev.photo_count}</span>
+        `;
+        tabsContainer.appendChild(btn);
+    });
+}
+
+function renderFolderOverview() {
+    const overviewContainer = document.getElementById('foldersOverview');
+    if (!allDevices || allDevices.length === 0) {
+        overviewContainer.style.display = 'none';
+        return;
+    }
+
+    overviewContainer.style.display = 'grid';
+    overviewContainer.innerHTML = '';
+
+    allDevices.forEach(dev => {
+        const card = document.createElement('div');
+        card.className = `folder-card ${currentFolder === dev.folder_name ? 'active-folder' : ''}`;
+        card.onclick = () => selectFolder(dev.folder_name);
+
+        card.innerHTML = `
+            <div>
+                <div class="folder-card-top">
+                    <div class="folder-icon">
+                        <i class="fas fa-folder"></i>
+                    </div>
+                    <div class="folder-details">
+                        <h3>${escapeHtml(dev.display_name)}</h3>
+                        <span>Folder: /${escapeHtml(dev.folder_name)}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="folder-meta">
+                <span><i class="fas fa-image"></i> ${dev.photo_count} photo${dev.photo_count === 1 ? '' : 's'}</span>
+                <span>${formatBytes(dev.total_size)}</span>
+            </div>
+        `;
+        overviewContainer.appendChild(card);
+    });
+}
+
+// Fetch photos for selected folder
+async function loadPhotos() {
+    const grid = document.getElementById('photoGrid');
+    grid.innerHTML = '<div class="empty-state"><p>Loading photos...</p></div>';
+
+    try {
+        const url = `/api/photos?folder=${encodeURIComponent(currentFolder)}`;
+        const res = await fetch(url);
+        const photos = await res.json();
+
+        if (photos.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+                    <h3>No photos here yet</h3>
+                    <p>Select or drop photos above to upload into this device folder.</p>
+                </div>
+            `;
+            return;
+        }
+
+        grid.innerHTML = '';
+        photos.forEach(photo => {
+            const card = document.createElement('div');
+            card.className = 'photo-card';
+            card.innerHTML = `
+                <div class="photo-img-wrap" onclick="openLightbox('${photo.url}', '${escapeHtml(photo.original_name)}', '${escapeHtml(photo.device_name)}', '${formatBytes(photo.file_size)}')">
+                    <img src="${photo.url}" alt="${escapeHtml(photo.original_name)}" class="photo-img" loading="lazy">
+                    <div class="photo-folder-tag">
+                        <i class="fas fa-folder-closed"></i> ${escapeHtml(photo.device_name)}
+                    </div>
+                </div>
+                <div class="photo-info">
+                    <div class="photo-text">
+                        <div class="photo-name" title="${escapeHtml(photo.original_name)}">${escapeHtml(photo.original_name)}</div>
+                        <div class="photo-date">${formatDate(photo.uploaded_at)} · ${formatBytes(photo.file_size)}</div>
+                    </div>
+                    <div class="photo-actions">
+                        <a href="${photo.url}" download="${escapeHtml(photo.original_name)}" class="btn-icon" title="Download">
+                            <i class="fas fa-download"></i>
+                        </a>
+                        <button class="btn-icon danger" onclick="deletePhoto(${photo.id})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    } catch (e) {
+        grid.innerHTML = '<div class="empty-state"><p>Error loading photos.</p></div>';
+        console.error('Failed to load photos', e);
+    }
+}
+
+function selectFolder(folder) {
+    currentFolder = folder;
+    renderFolderTabs();
+    renderFolderOverview();
+    loadPhotos();
+}
+
+// Lightbox Modal
+function openLightbox(url, name, device, size) {
+    const modal = document.getElementById('lightboxModal');
+    const modalImg = document.getElementById('modalImg');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalMeta = document.getElementById('modalMeta');
+    const modalDownload = document.getElementById('modalDownload');
+
+    modalImg.src = url;
+    modalTitle.textContent = name;
+    modalMeta.textContent = `Device: ${device} · Size: ${size}`;
+    modalDownload.href = url;
+    modalDownload.download = name;
+
+    modal.classList.add('open');
+}
+
+function closeLightbox() {
+    document.getElementById('lightboxModal').classList.remove('open');
+}
+
+// Delete Photo
+async function deletePhoto(photoId) {
+    if (!confirm('Are you sure you want to delete this photo from your NAS storage?')) {
+        return;
+    }
+    try {
+        const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            loadStats();
+            loadDevices();
+            loadPhotos();
+        }
+    } catch (e) {
+        alert('Failed to delete photo.');
+    }
+}
+
+// Upload Handling
+function setupUpload() {
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const deviceInput = document.getElementById('deviceNameInput');
+    const queue = document.getElementById('uploadQueue');
+    const progressFill = document.getElementById('uploadProgressFill');
+    const progressText = document.getElementById('uploadProgressText');
+
+    // Auto-detect and pre-fill device name if empty
+    if (!deviceInput.value) {
+        deviceInput.value = detectDeviceName();
+    }
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('dragover');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            uploadFiles(e.dataTransfer.files);
+        }
+    });
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files && fileInput.files.length > 0) {
+            uploadFiles(fileInput.files);
+        }
+    });
+
+    async function uploadFiles(files) {
+        const deviceName = deviceInput.value.trim() || 'Unknown Device';
+        const formData = new FormData();
+        formData.append('device_name', deviceName);
+
+        for (let i = 0; i < files.length; i++) {
+            formData.append('photos', files[i]);
+        }
+
+        queue.style.display = 'block';
+        progressFill.style.width = '30%';
+        progressText.textContent = `Uploading ${files.length} photo(s) to folder "${deviceName}"...`;
+
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/upload', true);
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progressFill.style.width = `${percent}%`;
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status === 200) {
+                    progressFill.style.width = '100%';
+                    progressText.textContent = 'Upload complete!';
+                    setTimeout(() => {
+                        queue.style.display = 'none';
+                        progressFill.style.width = '0%';
+                        fileInput.value = '';
+                    }, 1200);
+
+                    // Refresh view
+                    loadStats();
+                    loadDevices();
+                    loadPhotos();
+                } else {
+                    progressText.textContent = 'Upload failed. Please try again.';
+                }
+            };
+
+            xhr.onerror = () => {
+                progressText.textContent = 'Upload failed due to connection error.';
+            };
+
+            xhr.send(formData);
+        } catch (e) {
+            console.error('Upload error', e);
+            progressText.textContent = 'Upload error.';
+        }
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    setupUpload();
+    loadStats();
+    loadDevices();
+    loadPhotos();
+
+    // Close lightbox on click outside or ESC
+    document.getElementById('lightboxModal').addEventListener('click', (e) => {
+        if (e.target.id === 'lightboxModal') closeLightbox();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeLightbox();
+    });
+});
