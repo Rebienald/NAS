@@ -234,12 +234,12 @@ const SupabaseStorage = {
 
     async testConnection() {
         try {
-            const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/nas_photos?select=id&limit=1`, {
+            const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/portfolio_documents?metadata->>type=eq.nas_photo&select=id&limit=1`, {
                 headers: this.getHeaders()
             });
             if (res.ok) return { ok: true };
             const err = await res.json().catch(() => ({}));
-            return { ok: false, error: err.message || 'Table not ready', code: err.code };
+            return { ok: false, error: err.message || 'Connection failed' };
         } catch (e) {
             return { ok: false, error: e.message };
         }
@@ -280,9 +280,9 @@ const SupabaseStorage = {
     },
 
     async getPhotos(folder) {
-        let endpoint = `${SUPABASE_CONFIG.url}/rest/v1/nas_photos?select=*&order=id.desc`;
+        let endpoint = `${SUPABASE_CONFIG.url}/rest/v1/portfolio_documents?metadata->>type=eq.nas_photo&select=*&order=id.desc`;
         if (folder && folder !== 'all') {
-            endpoint = `${SUPABASE_CONFIG.url}/rest/v1/nas_photos?folder_name=eq.${encodeURIComponent(folder)}&select=*&order=id.desc`;
+            endpoint = `${SUPABASE_CONFIG.url}/rest/v1/portfolio_documents?metadata->>type=eq.nas_photo&metadata->>folder_name=eq.${encodeURIComponent(folder)}&select=*&order=id.desc`;
         }
         const res = await fetch(endpoint, { headers: this.getHeaders() });
         if (!res.ok) {
@@ -290,15 +290,18 @@ const SupabaseStorage = {
             throw new Error(err.message || 'Failed to fetch photos');
         }
         const data = await res.json();
-        return data.map(p => ({
-            id: p.id,
-            device_name: p.device_name,
-            folder_name: p.folder_name,
-            original_name: p.original_name,
-            url: p.url,
-            file_size: p.file_size,
-            uploaded_at: p.uploaded_at || p.created_at
-        }));
+        return data.map(row => {
+            const meta = row.metadata || {};
+            return {
+                id: row.id,
+                device_name: meta.device_name || 'Unknown Device',
+                folder_name: meta.folder_name || 'Unknown-Device',
+                original_name: meta.original_name || 'photo.jpg',
+                url: row.content,
+                file_size: meta.file_size || 0,
+                uploaded_at: row.created_at
+            };
+        });
     },
 
     async savePhoto(file, deviceName) {
@@ -306,15 +309,17 @@ const SupabaseStorage = {
         const folderName = deviceName.trim().replace(/[^\w\s\-\.]/g, '').replace(/[\s]+/g, '-');
 
         const payload = {
-            device_name: deviceName.trim(),
-            folder_name: folderName,
-            original_name: file.name,
-            url: base64Data,
-            file_size: file.size,
-            uploaded_at: new Date().toISOString()
+            content: base64Data,
+            metadata: {
+                type: 'nas_photo',
+                device_name: deviceName.trim(),
+                folder_name: folderName,
+                original_name: file.name,
+                file_size: file.size
+            }
         };
 
-        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/nas_photos`, {
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/portfolio_documents`, {
             method: 'POST',
             headers: this.getHeaders(),
             body: JSON.stringify(payload)
@@ -325,11 +330,21 @@ const SupabaseStorage = {
             throw new Error(err.message || 'Failed to save photo to Supabase');
         }
         const created = await res.json();
-        return created[0] || payload;
+        const row = created[0] || payload;
+        const meta = row.metadata || {};
+        return {
+            id: row.id,
+            device_name: meta.device_name || deviceName,
+            folder_name: meta.folder_name || folderName,
+            original_name: meta.original_name || file.name,
+            url: row.content,
+            file_size: meta.file_size || file.size,
+            uploaded_at: row.created_at || new Date().toISOString()
+        };
     },
 
     async deletePhoto(photoId) {
-        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/nas_photos?id=eq.${photoId}`, {
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/portfolio_documents?id=eq.${photoId}`, {
             method: 'DELETE',
             headers: this.getHeaders()
         });
