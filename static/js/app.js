@@ -1,11 +1,11 @@
 let currentFolder = 'all';
 let allDevices = [];
+let useBackend = false;
 
 // Device detection helper
 function detectDeviceName() {
     const ua = navigator.userAgent || '';
     
-    // Check for common phone identifiers in UA
     const redmiMatch = ua.match(/(Redmi[^;\)]*|M2\d{3}[^;\)]*|2\d{3}[^;\)]*)/i);
     if (redmiMatch) {
         return redmiMatch[1].trim();
@@ -39,11 +39,11 @@ function detectDeviceName() {
     if (/Linux/i.test(ua)) {
         return 'Linux PC';
     }
-    return 'Redmi Note 15'; // Clean sensible default
+    return 'Redmi Note 15';
 }
 
 function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
+    if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -64,8 +64,13 @@ function formatDate(dateString) {
 // Fetch stats and update header
 async function loadStats() {
     try {
-        const res = await fetch('/api/stats');
-        const data = await res.json();
+        let data;
+        if (useBackend) {
+            const res = await fetch('/api/stats');
+            data = await res.json();
+        } else {
+            data = await ClientStorage.getStats();
+        }
         document.getElementById('statTotalPhotos').textContent = data.photo_count || 0;
         document.getElementById('statTotalDevices').textContent = data.device_count || 0;
         document.getElementById('statTotalStorage').textContent = formatBytes(data.total_size_bytes || 0);
@@ -77,8 +82,12 @@ async function loadStats() {
 // Fetch devices and render folder overview and tabs
 async function loadDevices() {
     try {
-        const res = await fetch('/api/devices');
-        allDevices = await res.json();
+        if (useBackend) {
+            const res = await fetch('/api/devices');
+            allDevices = await res.json();
+        } else {
+            allDevices = await ClientStorage.getDevices();
+        }
 
         renderFolderTabs();
         renderFolderOverview();
@@ -149,9 +158,14 @@ async function loadPhotos() {
     grid.innerHTML = '<div class="empty-state"><p>Loading photos...</p></div>';
 
     try {
-        const url = `/api/photos?folder=${encodeURIComponent(currentFolder)}`;
-        const res = await fetch(url);
-        const photos = await res.json();
+        let photos = [];
+        if (useBackend) {
+            const url = `/api/photos?folder=${encodeURIComponent(currentFolder)}`;
+            const res = await fetch(url);
+            photos = await res.json();
+        } else {
+            photos = await ClientStorage.getPhotos(currentFolder);
+        }
 
         if (photos.length === 0) {
             grid.innerHTML = `
@@ -232,13 +246,16 @@ async function deletePhoto(photoId) {
         return;
     }
     try {
-        const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
-        const data = await res.json();
-        if (data.success) {
-            loadStats();
-            loadDevices();
-            loadPhotos();
+        if (useBackend) {
+            const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!data.success) throw new Error('Delete failed');
+        } else {
+            await ClientStorage.deletePhoto(photoId);
         }
+        loadStats();
+        loadDevices();
+        loadPhotos();
     } catch (e) {
         alert('Failed to delete photo.');
     }
@@ -253,7 +270,6 @@ function setupUpload() {
     const progressFill = document.getElementById('uploadProgressFill');
     const progressText = document.getElementById('uploadProgressText');
 
-    // Auto-detect and pre-fill device name if empty
     if (!deviceInput.value) {
         deviceInput.value = detectDeviceName();
     }
@@ -285,56 +301,61 @@ function setupUpload() {
 
     async function uploadFiles(files) {
         const deviceName = deviceInput.value.trim() || 'Unknown Device';
-        const formData = new FormData();
-        formData.append('device_name', deviceName);
-
-        for (let i = 0; i < files.length; i++) {
-            formData.append('photos', files[i]);
-        }
 
         queue.style.display = 'block';
         progressFill.style.width = '30%';
-        progressText.textContent = `Uploading ${files.length} photo(s) to folder "${deviceName}"...`;
+        progressText.textContent = `Saving ${files.length} photo(s) into folder "${deviceName}"...`;
 
         try {
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/api/upload', true);
-
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
-                    const percent = Math.round((e.loaded / e.total) * 100);
-                    progressFill.style.width = `${percent}%`;
+            if (useBackend) {
+                const formData = new FormData();
+                formData.append('device_name', deviceName);
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('photos', files[i]);
                 }
-            };
-
-            xhr.onload = () => {
-                if (xhr.status === 200) {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/upload', true);
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        progressFill.style.width = `${percent}%`;
+                    }
+                };
+                xhr.onload = () => {
                     progressFill.style.width = '100%';
                     progressText.textContent = 'Upload complete!';
-                    setTimeout(() => {
-                        queue.style.display = 'none';
-                        progressFill.style.width = '0%';
-                        fileInput.value = '';
-                    }, 1200);
-
-                    // Refresh view
-                    loadStats();
-                    loadDevices();
-                    loadPhotos();
-                } else {
-                    progressText.textContent = 'Upload failed. Please try again.';
+                    finishUpload();
+                };
+                xhr.onerror = () => {
+                    progressText.textContent = 'Upload failed.';
+                };
+                xhr.send(formData);
+            } else {
+                // Client-side instant saving
+                for (let i = 0; i < files.length; i++) {
+                    await ClientStorage.savePhoto(files[i], deviceName);
+                    const percent = Math.round(((i + 1) / files.length) * 100);
+                    progressFill.style.width = `${percent}%`;
                 }
-            };
-
-            xhr.onerror = () => {
-                progressText.textContent = 'Upload failed due to connection error.';
-            };
-
-            xhr.send(formData);
+                progressText.textContent = 'Saved to device folder successfully!';
+                finishUpload();
+            }
         } catch (e) {
             console.error('Upload error', e);
-            progressText.textContent = 'Upload error.';
+            progressText.textContent = 'Error saving photo.';
         }
+    }
+
+    function finishUpload() {
+        setTimeout(() => {
+            queue.style.display = 'none';
+            progressFill.style.width = '0%';
+            fileInput.value = '';
+        }, 1200);
+
+        loadStats();
+        loadDevices();
+        loadPhotos();
     }
 }
 
@@ -348,13 +369,13 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    useBackend = await ClientStorage.isBackendAvailable();
     setupUpload();
-    loadStats();
-    loadDevices();
-    loadPhotos();
+    await loadStats();
+    await loadDevices();
+    await loadPhotos();
 
-    // Close lightbox on click outside or ESC
     document.getElementById('lightboxModal').addEventListener('click', (e) => {
         if (e.target.id === 'lightboxModal') closeLightbox();
     });

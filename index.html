@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Cloud NAS - Web Hub</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+
+    <!-- Header Bar -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-group">
+                <div class="logo-icon">
+                    <i class="fas fa-server"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>NAS Cloud Storage</h1>
+                    <p>Device-Indexed Photo Repository</p>
+                </div>
+            </div>
+
+            <div class="header-stats">
+                <div class="stat-item">
+                    <span class="stat-val" id="statTotalPhotos">0</span>
+                    <span class="stat-lbl">Photos</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-val" id="statTotalDevices">0</span>
+                    <span class="stat-lbl">Device Folders</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-val" id="statTotalStorage">0 B</span>
+                    <span class="stat-lbl">Storage Used</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-content">
+        
+        <!-- Upload Card -->
+        <section class="upload-card">
+            <div class="device-setup-bar">
+                <div class="device-info-left">
+                    <div class="device-badge-icon">
+                        <i class="fas fa-mobile-screen"></i>
+                    </div>
+                    <div class="device-input-wrap">
+                        <label for="deviceNameInput">Target Device Folder</label>
+                        <input type="text" id="deviceNameInput" class="device-name-input" placeholder="e.g. Redmi Note 15" spellcheck="false">
+                    </div>
+                </div>
+                <div>
+                    <span style="font-size: 0.78rem; color: var(--text-muted);">
+                        <i class="fas fa-circle-info"></i> Uploaded photos are automatically filed into this device's dedicated folder.
+                    </span>
+                </div>
+            </div>
+
+            <div class="dropzone" id="dropzone">
+                <div class="dropzone-icon">
+                    <i class="fas fa-arrow-up-from-bracket"></i>
+                </div>
+                <div class="dropzone-title">Click to upload or drag and drop images</div>
+                <div class="dropzone-subtitle">Supports JPG, PNG, WEBP, GIF from your camera roll</div>
+                <input type="file" id="fileInput" class="file-input-hidden" multiple accept="image/*">
+            </div>
+
+            <div class="upload-queue" id="uploadQueue">
+                <div class="upload-progress-bar-wrap">
+                    <div class="upload-progress-fill" id="uploadProgressFill"></div>
+                </div>
+                <div class="upload-queue-text">
+                    <span id="uploadProgressText">Processing...</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Device Folders Overview Grid -->
+        <div class="folders-overview" id="foldersOverview" style="display: none;"></div>
+
+        <!-- Photos Section Toolbar -->
+        <section class="content-toolbar">
+            <div class="section-heading">
+                <h2>Photo Gallery</h2>
+                <p>Browse by device directory or view all centralized photos</p>
+            </div>
+
+            <div class="folder-tabs" id="folderTabs">
+                <button class="tab-btn active" onclick="selectFolder('all')">
+                    <i class="fas fa-layer-group"></i> All Photos
+                </button>
+            </div>
+        </section>
+
+        <!-- Photo Grid -->
+        <section class="photo-grid" id="photoGrid">
+            <div class="empty-state">
+                <div class="empty-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+                <h3>No photos stored yet</h3>
+                <p>Upload photos using the box above to create your first device folder.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal Lightbox -->
+    <div class="modal" id="lightboxModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-title" id="modalTitle">Photo Details</span>
+                <button class="btn-icon" onclick="closeLightbox()"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <img src="" id="modalImg" class="modal-img" alt="Enlarged photo">
+            </div>
+            <div class="modal-footer">
+                <span id="modalMeta"></span>
+                <a href="#" id="modalDownload" class="btn-icon" download title="Download Original">
+                    <i class="fas fa-download"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dual-Mode Engine: Works with IndexedDB for Web/GitHub Pages & syncs with Flask when backend is connected -->
+    <script src="static/js/storage.js"></script>
+    <script src="static/js/app.js"></script>
+</body>
+</html>
